@@ -1,0 +1,154 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+ENV['VAGRANT_DEFAULT_PROVIDER'] = 'libvirt'
+
+Vagrant.configure("2") do |config|
+  Control = 3 # max number of contrl nodes
+  Compute = 2 # max number of compute nodes
+  Ceph = 1 # max number of ceph nodes
+  Zone = 'dev' # your zone name
+  NetPrefixService = '100.100.100' # 1 ~ 3th octet IP
+  NetPrefixMGMT = '1.1.1' # 1 ~ 3th octet IP
+  NetPrefixStorage = '2.2.2' # 1 ~ 3th octet IP
+  NetPrefixTunnel = '3.3.3' # 1 ~ 3th octet IP
+  NetPrefixProvider = '4.4.4' # 1 ~ 3th octet IP
+  NetSuffix = 1 # 4th octet IP
+
+config.vm.synced_folder "/data/kvm/cloudx-pkg", "/vagrant", type: "nfs"
+
+
+### Do not edit below this line ###
+
+  #==============#
+  # ControlNodes #
+  #==============#
+
+  (1..Control).each do |i|
+    config.vm.define "#{Zone}-control-#{i}" do |cfg|
+      cfg.vm.box = "centos/7"
+      cfg.vm.provider "libvirt" do |vb|
+        vb.cpus = 16
+        vb.memory = 32768
+        vb.management_network_name = "service"
+        vb.management_network_address = "#{NetPrefixService}.0/24"
+        #vb.management_network_mac = "52:54:00:3f:2a:a#{i}"
+        vb.management_network_mode = "nat"
+        vb.storage_pool_name = "volumes"
+        vb.machine_virtual_size = 500
+        vb.graphics_ip = "0.0.0.0"
+      end
+      cfg.vm.host_name = "#{Zone}-control-#{i}"
+      cfg.vm.network "private_network", ip: "#{NetPrefixMGMT}.#{NetSuffix}#{i}",
+        libvirt__network_name: "mgmt",
+        libvirt__forward_mode: "none",
+        libvirt__dhcp_enabled: "false"
+      cfg.vm.network "private_network", ip: "#{NetPrefixStorage}.#{NetSuffix}#{i}",
+        libvirt__network_name: "storage",
+        libvirt__forward_mode: "none",
+        libvirt__dhcp_enabled: "false"
+        #libvirt__mtu: "9000"
+      cfg.vm.network "private_network", ip: "#{NetPrefixTunnel}.#{NetSuffix}#{i}",
+        libvirt__network_name: "tunnel",
+        libvirt__forward_mode: "none",
+        libvirt__dhcp_enabled: "false"
+      cfg.vm.network "private_network", ip: "#{NetPrefixProvider}.#{NetSuffix}#{i}",
+        auto_config: false,
+        libvirt__network_name: "provider",
+        libvirt__forward_mode: "none",
+        libvirt__dhcp_enabled: "false"
+      cfg.vm.network "forwarded_port", guest: 22, host: "600#{NetSuffix}#{i}", host_ip: "127.0.0.1"
+      cfg.vm.provision "shell", path: "bootstrap.sh", args: [ \
+        Control, Compute, Ceph, Zone, NetPrefixService, NetPrefixMGMT, NetSuffix]
+    end
+  end
+
+  #================#
+  # Comopute Nodes #
+  #================#
+
+  (1..Compute).each do |i|
+    config.vm.define "#{Zone}-compute-#{i}" do |cfg|
+      cfg.vm.box = "centos/7"
+      cfg.vm.provider "libvirt" do |vb|
+        vb.cpus = 16
+        vb.memory = 32768
+        vb.nested = true
+        vb.cpu_mode = "host-passthrough"
+        vb.management_network_name = "service"
+        vb.management_network_address = "#{NetPrefixService}.0/24"
+        #vb.management_network_mac = "52:54:00:3f:2a:b#{i}"
+        vb.management_network_mode = "nat"
+        vb.storage_pool_name = "volumes"
+        vb.graphics_ip = "0.0.0.0"
+      end
+      cfg.vm.host_name = "#{Zone}-compute-#{i}"
+      cfg.vm.network "private_network", ip: "#{NetPrefixMGMT}.#{NetSuffix + 1}#{i}",
+        libvirt__network_name: "mgmt",
+        libvirt__forward_mode: "none",
+        libvirt__dhcp_enabled: "false"
+      cfg.vm.network "private_network", ip: "#{NetPrefixStorage}.#{NetSuffix + 1}#{i}",
+        libvirt__network_name: "storage",
+        libvirt__forward_mode: "none",
+        libvirt__dhcp_enabled: "false"
+        #libvirt__mtu: "9000"
+      cfg.vm.network "private_network", ip: "#{NetPrefixTunnel}.#{NetSuffix + 1}#{i}",
+        libvirt__network_name: "tunnel",
+        libvirt__forward_mode: "none",
+        libvirt__dhcp_enabled: "false"
+      cfg.vm.network "private_network", ip: "#{NetPrefixProvider}.#{NetSuffix + 1}#{i}",
+        auto_config: false,
+        libvirt__network_name: "provider",
+        libvirt__forward_mode: "none",
+        libvirt__dhcp_enabled: "false"
+      cfg.vm.network "forwarded_port", guest: 22, host: "600#{NetSuffix + 1}#{i}", host_ip: "127.0.0.1"
+      cfg.vm.provision "shell", path: "bootstrap.sh", args: [ \
+        Control, Compute, Ceph, Zone, NetPrefixService, NetPrefixMGMT, NetSuffix]
+    end
+  end
+
+  #============#
+  # Ceph Nodes #
+  #============#
+
+  (1..Ceph).each do |i|
+    config.vm.define "#{Zone}-ceph-#{i}" do |cfg|
+      cfg.vm.box = "centos/7"
+      cfg.vm.provider "libvirt" do |vb|
+        vb.cpus = 8
+        vb.memory = 16384
+        vb.management_network_name = "service"
+        vb.management_network_address = "#{NetPrefixService}.0/24"
+        #vb.management_network_mac = "52:54:00:3f:2a:c#{i}"
+        vb.management_network_mode = "nat"
+        vb.storage :file, :device => 'sdb', :size => '300G'
+        vb.storage :file, :device => 'sdc', :size => '300G'
+        vb.storage :file, :device => 'sdd', :size => '300G'
+        vb.storage_pool_name = "volumes"
+        vb.graphics_ip = "0.0.0.0"
+      end
+      cfg.vm.host_name = "#{Zone}-ceph-#{i}"
+      cfg.vm.network "private_network", ip: "#{NetPrefixMGMT}.#{NetSuffix + 2}#{i}",
+        libvirt__network_name: "mgmt",
+        libvirt__forward_mode: "none",
+        libvirt__dhcp_enabled: "false"
+      cfg.vm.network "private_network", ip: "#{NetPrefixStorage}.#{NetSuffix + 2}#{i}",
+        libvirt__network_name: "storage",
+        libvirt__forward_mode: "none",
+        libvirt__dhcp_enabled: "false"
+        #libvirt__mtu: "9000"
+      cfg.vm.network "private_network", ip: "#{NetPrefixTunnel}.#{NetSuffix + 2}#{i}",
+        libvirt__network_name: "tunnel",
+        libvirt__forward_mode: "none",
+        libvirt__dhcp_enabled: "false"
+      cfg.vm.network "private_network", ip: "#{NetPrefixProvider}.#{NetSuffix + 2}#{i}",
+        auto_config: false,
+        libvirt__network_name: "provider",
+        libvirt__forward_mode: "none",
+        libvirt__dhcp_enabled: "false"
+      cfg.vm.network "forwarded_port", guest: 22, host: "600#{NetSuffix + 2}#{i}", host_ip: "127.0.0.1"
+      cfg.vm.provision "shell", path: "bootstrap.sh", args: [ \
+        Control, Compute, Ceph, Zone, NetPrefixService, NetPrefixMGMT, NetSuffix]
+    end
+  end
+end
