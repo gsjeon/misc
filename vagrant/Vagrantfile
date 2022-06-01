@@ -7,7 +7,7 @@ Vagrant.configure("2") do |config|
   Control = 3 # max number of contrl nodes
   Compute = 2 # max number of compute nodes
   Ceph = 1 # max number of ceph nodes
-  Zone = 'dev' # your zone name
+  Zone = 'jgs' # your zone name
   NetPrefixService = '100.100.100' # 1 ~ 3th octet IP
   NetPrefixMGMT = '1.1.1' # 1 ~ 3th octet IP
   NetPrefixStorage = '2.2.2' # 1 ~ 3th octet IP
@@ -27,9 +27,10 @@ config.vm.synced_folder "/data/kvm/cloudx-pkg", "/vagrant", type: "nfs"
   (1..Control).each do |i|
     config.vm.define "#{Zone}-control-#{i}" do |cfg|
       cfg.vm.box = "centos/7"
+      cfg.vm.box_version = "2004.01"
       cfg.vm.provider "libvirt" do |vb|
         vb.cpus = 16
-        vb.memory = 32768
+        vb.memory = 65536
         vb.management_network_name = "service"
         vb.management_network_address = "#{NetPrefixService}.0/24"
         #vb.management_network_mac = "52:54:00:3f:2a:a#{i}"
@@ -70,6 +71,7 @@ config.vm.synced_folder "/data/kvm/cloudx-pkg", "/vagrant", type: "nfs"
   (1..Compute).each do |i|
     config.vm.define "#{Zone}-compute-#{i}" do |cfg|
       cfg.vm.box = "centos/7"
+      cfg.vm.box_version = "2004.01"
       cfg.vm.provider "libvirt" do |vb|
         vb.cpus = 16
         vb.memory = 32768
@@ -114,6 +116,7 @@ config.vm.synced_folder "/data/kvm/cloudx-pkg", "/vagrant", type: "nfs"
   (1..Ceph).each do |i|
     config.vm.define "#{Zone}-ceph-#{i}" do |cfg|
       cfg.vm.box = "centos/7"
+      cfg.vm.box_version = "2004.01"
       cfg.vm.provider "libvirt" do |vb|
         vb.cpus = 8
         vb.memory = 16384
